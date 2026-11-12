@@ -1,0 +1,31 @@
+# Anything matched here is NOT sent to the Docker build context.
+# Smaller context  =>  faster builds + smaller image layers.
+
+# Git history isn't needed by the build.
+.git
+.gitignore
+
+# Local secrets must not bake into the image; pass them at runtime.
+.env
+.env.*
+!.env.example
+
+# IDE / editor cruft
+.idea
+*.iml
+
+# Throwaway scripts (per CLAUDE.md) — not part of the service.
+play
+
+# Docs + docker files don't belong in the image.
+README.md
+plan.md
+docs
+Dockerfile
+.dockerignore
+docker-compose.yml
+docker-compose.test.yml
+.github
+
+# Local archives
+*.zip

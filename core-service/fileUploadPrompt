@@ -1,0 +1,6 @@
+1. install awssdk
+2. init s3 functionality inside pkg (interface, functions that we will need only)
+3. create a new module named media (responsible for media upload) same architecure as the existing modules
+4. init the pkg s3 module inside lib
+5. media(id, restaurant. uploaded_by, created_at, status, mediaURL/path)
+6. env variables update (aws region, s3 bucket, AWS_ACCESS_KEY_ID, secret_key)

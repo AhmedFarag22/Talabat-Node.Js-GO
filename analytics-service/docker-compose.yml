@@ -1,0 +1,52 @@
+# =====================================================================
+# QuickBite — analytics-service local stack
+#   docker compose up -d --build   # build + start everything
+#   docker compose down -v         # stop and wipe data
+#
+# Consumes order.events (published by order-service) and core.events
+# (RBAC invalidation). Reads/writes aggregates in MongoDB.
+# =====================================================================
+services:
+
+  # MongoDB — the aggregate store (agg_*_day collections).
+  mongo:
+    image: mongo:7
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo-data:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  # RabbitMQ — inbound order.events + core.events. UI on :15672.
+  rabbitmq:
+    image: rabbitmq:3.13-management-alpine
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      retries: 10
+
+  analytics-service:
+    build: .
+    env_file:
+      - .env
+    environment:
+      # Override hostnames to the docker-network service names.
+      MONGO_URI: mongodb://mongo:27017
+      RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672/
+    ports:
+      - "4100:4100"
+    depends_on:
+      mongo:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+
+volumes:
+  mongo-data:

@@ -1,0 +1,97 @@
+# =====================================================================
+# QuickBite — order-service local stack
+#   docker compose up -d --build   # build + start everything
+#   npm run migrate:all            # run migrations from host once it's up
+#   docker compose down -v         # stop and wipe data
+# =====================================================================
+
+services:
+
+  # Postgres — one instance, four logical DBs (see docker/postgres-init.sql).
+  postgres:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: postgres
+    ports:
+      # Exposed so `npm run migrate:all` on the host can reach it.
+      - "5432:5432"
+    volumes:
+      # Persist data across restarts; init script creates the 4 databases on first boot.
+      - postgres-data:/var/lib/postgresql/data
+      - ./docker/postgres-init.sql:/docker-entrypoint-initdb.d/01-init.sql:ro
+    healthcheck:
+      # depends_on below waits until this passes.
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      retries: 10
+
+  # Redis — cache, Socket.IO adapter, idempotency keys.
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      retries: 10
+
+  # RabbitMQ — inbound async events from core-service. UI on :15672.
+  rabbitmq:
+    image: rabbitmq:3.13-management-alpine
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      retries: 10
+
+  # The HTTP + WebSocket server (src/server.ts).
+  order-service:
+    build: .
+    env_file:
+      - .env
+    environment:
+      # Override hostnames to the docker-network service names.
+      DB_eg_HOST: postgres
+      DB_ksa_HOST: postgres
+      ARCHIVE_DB_eg_HOST: postgres
+      ARCHIVE_DB_ksa_HOST: postgres
+      REDIS_HOST: redis
+      RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672
+    ports:
+      - "4000:4000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+
+  # Background jobs — same image, different command.
+  order-worker:
+    build: .
+    command: ["node", "dist/worker.js"]
+    env_file:
+      - .env
+    environment:
+      DB_eg_HOST: postgres
+      DB_ksa_HOST: postgres
+      ARCHIVE_DB_eg_HOST: postgres
+      ARCHIVE_DB_ksa_HOST: postgres
+      REDIS_HOST: redis
+      RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+
+# Docker-managed volume so Postgres data survives `down` (wiped by `down -v`).
+volumes:
+  postgres-data:

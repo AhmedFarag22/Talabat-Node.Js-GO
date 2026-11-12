@@ -1,0 +1,21 @@
+# =====================================================================
+# CI test stack. Mirrors the other services' docker-compose.test.yml.
+#
+#   docker compose -f docker-compose.test.yml run --rm test
+#
+# The unit suite is pure (no Mongo/RabbitMQ needed), so the test service
+# just compiles everything and runs `go test`. set -e → fail fast.
+# =====================================================================
+services:
+  test:
+    image: golang:1.21-alpine
+    working_dir: /app
+    volumes:
+      - .:/app
+      - go-build-cache:/root/.cache/go-build
+      - go-mod-cache:/go/pkg/mod
+    command: sh -e -c "go build ./... && go vet ./... && go test ./..."
+
+volumes:
+  go-build-cache:
+  go-mod-cache:
